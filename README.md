@@ -1,4 +1,5 @@
 Beastflix - Imersão Alura [FRONT-END + IA]
+
 Beastflix é um projeto desenvolvido durante a Imersão Alura, que combina front-end e inteligência artificial para recriar a experiência de uma plataforma de streaming com um toque lúdico. A aplicação apresenta uma seleção de perfis temáticos (Bear, Cat, Owl, Wolf) e, ao clicar, o usuário é levado a um catálogo inspirado na Netflix.
 
 🚀 Funcionalidades
@@ -22,4 +23,5 @@ JavaScript (manipulação do DOM, localStorage, análise de cores via Canvas)
 Font Awesome e Google Fonts
 
 🧠 Destaque de IA
+
 O projeto utiliza um algoritmo de quantização de cores para extrair a tonalidade predominante nas bordas de cada imagem de perfil e aplicá-la como sombra ao hover. Essa técnica simula uma “cor dominante” extraída da imagem, tornando a interação mais inteligente e visualmente atraente.
