@@ -50,7 +50,7 @@
     </main>
 
     <!-- Script para efeito de sombra dinâmica -->
-   <script>
+  <script>
     document.addEventListener('DOMContentLoaded', function() {
         const profiles = document.querySelectorAll('.profile');
 
@@ -59,28 +59,30 @@
             const figure = profile.querySelector('figure');
             let dominantColor = null;
 
-            // Função que extrai a cor dominante das bordas da imagem
-            function extractBorderColor() {
-                // Se já calculou, retorna direto
-                if (dominantColor) return dominantColor;
-
-                // Verifica se a imagem está realmente carregada
+            function extractColorSafely() {
                 if (!img.complete || img.naturalWidth === 0) {
-                    // Ainda não carregada – retorna null para aguardar evento load
-                    return null;
+                    return null; // ainda não carregada
                 }
 
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = img.naturalWidth;
-                canvas.height = img.naturalHeight;
-
                 try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.naturalWidth;
+                    canvas.height = img.naturalHeight;
                     ctx.drawImage(img, 0, 0);
+                    
+                    // Verifica se o canvas foi "tainted" por CORS
+                    try {
+                        ctx.getImageData(0, 0, 1, 1);
+                    } catch (e) {
+                        console.warn('CORS bloqueou acesso à imagem:', img.src);
+                        return 'rgba(0,0,0,0.5)';
+                    }
+
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const data = imageData.data;
-
-                    // Quantização para 16 tons por canal (RGB)
+                    
+                    // (código de extração de cor igual ao anterior)
                     const quantize = (r, g, b) => {
                         const qr = Math.round(r / 16) * 16;
                         const qg = Math.round(g / 16) * 16;
@@ -98,7 +100,6 @@
                     const w = canvas.width;
                     const h = canvas.height;
 
-                    // Pixels das bordas (primeira/última linha e coluna)
                     for (let x = 0; x < w; x++) {
                         const topIdx = (0 * w + x) * 4;
                         const bottomIdx = ((h - 1) * w + x) * 4;
@@ -121,72 +122,55 @@
                         }
                     }
 
-                    if (borderDominant) {
-                        dominantColor = borderDominant;
-                    } else {
-                        // Fallback: cor mais comum em toda a imagem
-                        const fullCount = {};
-                        for (let i = 0; i < data.length; i += 4) {
-                            const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
-                            if (a <= 128) continue;
-                            const color = quantize(r, g, b);
-                            fullCount[color] = (fullCount[color] || 0) + 1;
-                        }
-                        let maxFull = 0;
-                        for (const color in fullCount) {
-                            if (fullCount[color] > maxFull) {
-                                maxFull = fullCount[color];
-                                dominantColor = color;
-                            }
-                        }
-                    }
+                    if (borderDominant) return borderDominant;
 
-                    if (!dominantColor) {
-                        dominantColor = 'rgba(0,0,0,0.5)';
+                    // fallback: cor média
+                    let rTotal = 0, gTotal = 0, bTotal = 0, count = 0;
+                    for (let i = 0; i < data.length; i += 4) {
+                        const a = data[i+3];
+                        if (a > 128) {
+                            rTotal += data[i];
+                            gTotal += data[i+1];
+                            bTotal += data[i+2];
+                            count++;
+                        }
                     }
-                } catch (e) {
-                    console.warn('Erro ao extrair cor da imagem:', e);
-                    dominantColor = 'rgba(0,0,0,0.5)';
+                    if (count > 0) {
+                        const rAvg = Math.round(rTotal / count);
+                        const gAvg = Math.round(gTotal / count);
+                        const bAvg = Math.round(bTotal / count);
+                        return `rgb(${rAvg},${gAvg},${bAvg})`;
+                    }
+                    
+                    return 'rgba(0,0,0,0.5)';
+                } catch (err) {
+                    console.warn('Erro ao extrair cor da imagem:', err);
+                    return 'rgba(0,0,0,0.5)';
                 }
-
-                return dominantColor;
             }
 
-            // Aguarda a imagem carregar para extrair a cor
-            function onImageLoad() {
-                extractBorderColor(); // calcula e armazena em dominantColor
-                // Após carregar, podemos remover o listener se desejar
-                img.removeEventListener('load', onImageLoad);
+            function updateColor() {
+                if (!dominantColor) {
+                    const color = extractColorSafely();
+                    if (color) dominantColor = color;
+                }
             }
 
             if (img.complete && img.naturalWidth > 0) {
-                // Imagem já carregada
-                extractBorderColor();
+                updateColor();
             } else {
-                // Aguarda o carregamento
-                img.addEventListener('load', onImageLoad);
-                // Opcional: fallback caso a imagem demore muito ou falhe
-                img.addEventListener('error', function() {
+                img.addEventListener('load', updateColor);
+                img.addEventListener('error', () => {
                     dominantColor = 'rgba(0,0,0,0.5)';
                 });
             }
 
-            // Aplica a sombra ao passar o mouse
-            profile.addEventListener('mouseenter', function() {
-                if (dominantColor) {
-                    figure.style.boxShadow = `0 8px 16px ${dominantColor}`;
-                } else {
-                    // Se por algum motivo a cor ainda não estiver disponível, tenta extrair agora
-                    const color = extractBorderColor();
-                    if (color) {
-                        figure.style.boxShadow = `0 8px 16px ${color}`;
-                    } else {
-                        figure.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.5)';
-                    }
-                }
+            profile.addEventListener('mouseenter', () => {
+                if (!dominantColor) updateColor();
+                figure.style.boxShadow = `0 8px 16px ${dominantColor || 'rgba(0,0,0,0.5)'}`;
             });
 
-            profile.addEventListener('mouseleave', function() {
+            profile.addEventListener('mouseleave', () => {
                 figure.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.5)';
             });
         });
