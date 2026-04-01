@@ -3,7 +3,7 @@ export const categories = [
         title: "Épicos",
         items: [
             {
-                img: "assets/Lion King.jpg", top10: true, badge: "Clássico", badgeColor: "red", progress: 0,
+                img: "assets/LionKing.jpg", top10: true, badge: "Clássico", badgeColor: "red", progress: 0,
                 youtube: "https://www.youtube.com/watch?v=O3tD8d--FRo"
             },
             {
