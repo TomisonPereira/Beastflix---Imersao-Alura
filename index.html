@@ -50,24 +50,37 @@
     </main>
 
     <!-- Script para efeito de sombra dinâmica -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const profiles = document.querySelectorAll('.profile');
-            profiles.forEach(profile => {
-                const img = profile.querySelector('img');
-                const figure = profile.querySelector('figure');
-                let dominantColor = null;
+   <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const profiles = document.querySelectorAll('.profile');
 
-                const calculateColor = function() {
-                    if (dominantColor) return dominantColor;
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    canvas.width = img.naturalWidth;
-                    canvas.height = img.naturalHeight;
+        profiles.forEach(profile => {
+            const img = profile.querySelector('img');
+            const figure = profile.querySelector('figure');
+            let dominantColor = null;
+
+            // Função que extrai a cor dominante das bordas da imagem
+            function extractBorderColor() {
+                // Se já calculou, retorna direto
+                if (dominantColor) return dominantColor;
+
+                // Verifica se a imagem está realmente carregada
+                if (!img.complete || img.naturalWidth === 0) {
+                    // Ainda não carregada – retorna null para aguardar evento load
+                    return null;
+                }
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+
+                try {
                     ctx.drawImage(img, 0, 0);
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const data = imageData.data;
 
+                    // Quantização para 16 tons por canal (RGB)
                     const quantize = (r, g, b) => {
                         const qr = Math.round(r / 16) * 16;
                         const qg = Math.round(g / 16) * 16;
@@ -85,24 +98,25 @@
                     const w = canvas.width;
                     const h = canvas.height;
 
+                    // Pixels das bordas (primeira/última linha e coluna)
                     for (let x = 0; x < w; x++) {
-                        const topIndex = (0 * w + x) * 4;
-                        const bottomIndex = ((h - 1) * w + x) * 4;
-                        pushColor(data[topIndex], data[topIndex+1], data[topIndex+2], data[topIndex+3]);
-                        pushColor(data[bottomIndex], data[bottomIndex+1], data[bottomIndex+2], data[bottomIndex+3]);
+                        const topIdx = (0 * w + x) * 4;
+                        const bottomIdx = ((h - 1) * w + x) * 4;
+                        pushColor(data[topIdx], data[topIdx+1], data[topIdx+2], data[topIdx+3]);
+                        pushColor(data[bottomIdx], data[bottomIdx+1], data[bottomIdx+2], data[bottomIdx+3]);
                     }
                     for (let y = 1; y < h - 1; y++) {
-                        const leftIndex = (y * w + 0) * 4;
-                        const rightIndex = (y * w + (w - 1)) * 4;
-                        pushColor(data[leftIndex], data[leftIndex+1], data[leftIndex+2], data[leftIndex+3]);
-                        pushColor(data[rightIndex], data[rightIndex+1], data[rightIndex+2], data[rightIndex+3]);
+                        const leftIdx = (y * w + 0) * 4;
+                        const rightIdx = (y * w + (w - 1)) * 4;
+                        pushColor(data[leftIdx], data[leftIdx+1], data[leftIdx+2], data[leftIdx+3]);
+                        pushColor(data[rightIdx], data[rightIdx+1], data[rightIdx+2], data[rightIdx+3]);
                     }
 
                     let borderDominant = null;
-                    let borderMaxCount = 0;
+                    let maxCount = 0;
                     for (const color in borderCount) {
-                        if (borderCount[color] > borderMaxCount) {
-                            borderMaxCount = borderCount[color];
+                        if (borderCount[color] > maxCount) {
+                            maxCount = borderCount[color];
                             borderDominant = color;
                         }
                     }
@@ -110,20 +124,18 @@
                     if (borderDominant) {
                         dominantColor = borderDominant;
                     } else {
-                        const colorCount = {};
+                        // Fallback: cor mais comum em toda a imagem
+                        const fullCount = {};
                         for (let i = 0; i < data.length; i += 4) {
-                            const r = data[i];
-                            const g = data[i + 1];
-                            const b = data[i + 2];
-                            const a = data[i + 3];
+                            const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
                             if (a <= 128) continue;
                             const color = quantize(r, g, b);
-                            colorCount[color] = (colorCount[color] || 0) + 1;
+                            fullCount[color] = (fullCount[color] || 0) + 1;
                         }
-                        let maxCount = 0;
-                        for (const color in colorCount) {
-                            if (colorCount[color] > maxCount) {
-                                maxCount = colorCount[color];
+                        let maxFull = 0;
+                        for (const color in fullCount) {
+                            if (fullCount[color] > maxFull) {
+                                maxFull = fullCount[color];
                                 dominantColor = color;
                             }
                         }
@@ -132,21 +144,54 @@
                     if (!dominantColor) {
                         dominantColor = 'rgba(0,0,0,0.5)';
                     }
+                } catch (e) {
+                    console.warn('Erro ao extrair cor da imagem:', e);
+                    dominantColor = 'rgba(0,0,0,0.5)';
+                }
 
-                    return dominantColor;
-                };
+                return dominantColor;
+            }
 
-                profile.addEventListener('mouseenter', function() {
-                    const color = calculateColor();
-                    figure.style.boxShadow = `0 8px 16px ${color}`;
+            // Aguarda a imagem carregar para extrair a cor
+            function onImageLoad() {
+                extractBorderColor(); // calcula e armazena em dominantColor
+                // Após carregar, podemos remover o listener se desejar
+                img.removeEventListener('load', onImageLoad);
+            }
+
+            if (img.complete && img.naturalWidth > 0) {
+                // Imagem já carregada
+                extractBorderColor();
+            } else {
+                // Aguarda o carregamento
+                img.addEventListener('load', onImageLoad);
+                // Opcional: fallback caso a imagem demore muito ou falhe
+                img.addEventListener('error', function() {
+                    dominantColor = 'rgba(0,0,0,0.5)';
                 });
+            }
 
-                profile.addEventListener('mouseleave', function() {
-                    figure.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.5)';
-                });
+            // Aplica a sombra ao passar o mouse
+            profile.addEventListener('mouseenter', function() {
+                if (dominantColor) {
+                    figure.style.boxShadow = `0 8px 16px ${dominantColor}`;
+                } else {
+                    // Se por algum motivo a cor ainda não estiver disponível, tenta extrair agora
+                    const color = extractBorderColor();
+                    if (color) {
+                        figure.style.boxShadow = `0 8px 16px ${color}`;
+                    } else {
+                        figure.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.5)';
+                    }
+                }
+            });
+
+            profile.addEventListener('mouseleave', function() {
+                figure.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.5)';
             });
         });
-    </script>
+    });
+</script>
 
     <!-- Armazenar perfil ativo no localStorage -->
     <script>
